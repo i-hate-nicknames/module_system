@@ -7,7 +7,7 @@ import (
 )
 
 // InitFN is a function that initializes module from a config
-type InitFN func(conf string) error
+type InitFN func(conf Config) error
 
 // Module is a single system unit that represents a part of the system that must
 // be initialized. Module can have dependencies, that should be initialized before
@@ -23,9 +23,9 @@ type Module struct {
 }
 
 // MakeModule returns a new module with given init function and dependencies
-func MakeModule(name string, init InitFN, deps ...*Module) *Module {
+func MakeModule(name string, init InitFN, deps ...*Module) Module {
 	done := make(chan struct{}, 0)
-	return &Module{
+	return Module{
 		Name: name,
 		init: init,
 		deps: deps,
@@ -55,7 +55,7 @@ func (m *Module) isInitDone() bool {
 // InitSequential initializes all module dependencies recursively and sequentially, one by one
 // first to last and depth first
 // If any of the underlying dependencies, or this module initialize with error, return that error
-func (m *Module) InitSequential(conf string) error {
+func (m *Module) InitSequential(conf Config) error {
 	for _, dep := range m.deps {
 		if dep.isInitDone() {
 			continue
@@ -75,7 +75,7 @@ func (m *Module) InitSequential(conf string) error {
 // in each in a separate goroutine. It will block and wait on modules whose dependencies are not
 // yet fully initialized themselves
 // This function should be run in a separate goroutine
-func (m *Module) InitConcurrent(ctx context.Context, conf string) {
+func (m *Module) InitConcurrent(ctx context.Context, conf Config) {
 	// don't do anything if we already started
 	ok := m.setRunning(true)
 	if !ok {

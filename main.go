@@ -5,46 +5,48 @@ import (
 	"time"
 )
 
-var visorState *State
+type Config string
 
 func init() {
-	initStates()
-
-	// order is fixed here, module registration of a dependent module should be
-	// placed below modules it depends upon
-	// this can be eliminated by passing around pointers
-	regModuleA()
 	regModuleB()
+	regModuleA()
+	regVisorModule()
 }
 
-func initStates() {
-	visorState = &State{Name: "visor.State"}
-}
-
-var a *Module
+var a Module
 
 func regModuleA() {
-	init := func(conf string) error {
+	init := func(conf Config) error {
 		time.Sleep(1 * time.Second)
 		fmt.Printf("initializing module a with conf %s\n", conf)
 		return nil
 	}
 	a = MakeModule("a", init)
-	visorState.RegisterModule(a)
 }
 
-var b *Module
+var b Module
 
 func regModuleB() {
-	init := func(conf string) error {
+	init := func(conf Config) error {
 		time.Sleep(1 * time.Second)
 		fmt.Printf("initializing module b with conf %s\n", conf)
 		return nil
 	}
-	b = MakeModule("b", init, a)
-	visorState.RegisterModule(b)
+	b = MakeModule("b", init, &a)
+}
+
+var visor Module
+
+func regVisorModule() {
+	init := func(conf Config) error { return nil }
+	visor = MakeModule("visor", init, &a, &b)
 }
 
 func main() {
-	visorState.InitSequential()
+	// conf := Config("some config")
+	// ctx := context.Background()
+	// visor.InitConcurrent(ctx, conf)
+
+	conf := Config("some config")
+	visor.InitSequential(conf)
 }
