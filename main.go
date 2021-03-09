@@ -10,8 +10,11 @@ var visorState *State
 func init() {
 	initStates()
 
-	initModuleA()
-	initModuleB()
+	// order is fixed here, module registration of a dependent module should be
+	// placed below modules it depends upon
+	// this can be eliminated by passing around pointers
+	regModuleA()
+	regModuleB()
 }
 
 func initStates() {
@@ -20,7 +23,7 @@ func initStates() {
 
 var a *Module
 
-func initModuleA() {
+func regModuleA() {
 	init := func(conf string) error {
 		time.Sleep(1 * time.Second)
 		fmt.Printf("initializing module a with conf %s\n", conf)
@@ -32,7 +35,7 @@ func initModuleA() {
 
 var b *Module
 
-func initModuleB() {
+func regModuleB() {
 	init := func(conf string) error {
 		time.Sleep(1 * time.Second)
 		fmt.Printf("initializing module b with conf %s\n", conf)
