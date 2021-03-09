@@ -1,5 +1,7 @@
 package main
 
+import "sync"
+
 // InitFN is a function that initializes module from a config
 type InitFN func(conf string) error
 
@@ -7,19 +9,23 @@ type InitFN func(conf string) error
 // be initialized. Module can have dependencies, that should be initialized before
 // module can start its own initialization
 type Module struct {
-	Name string
-	init InitFN
-	err  error
-	done chan struct{}
-	deps []*Module
+	Name    string
+	init    InitFN
+	err     error
+	done    <-chan struct{}
+	deps    []*Module
+	mux     sync.RWMutex
+	started bool
 }
 
 // MakeModule returns a new module with given init function and dependencies
 func MakeModule(name string, init InitFN, deps ...*Module) *Module {
+	done := make(chan struct{}, 0)
 	return &Module{
 		Name: name,
 		init: init,
 		deps: deps,
+		done: done,
 	}
 }
 
@@ -42,5 +48,17 @@ func (m *Module) InitSequential(conf string) error {
 // yet fully initialized themselves
 // This function should be run in a separate goroutine
 func (m *Module) InitConcurrent() {
+	// if is in the process of initialization, exit
 
+	// for every dependency:
+	// if a dependency is initialized, skip it
+	// if a dependency is not initialized, run a goroutine
+	// that will try to initialize it
+
+	// for every dependency:
+	// wait for finishing initialization
+	// check error field of every dependency, if any has it, set its own error
+	// field and exit
+
+	// run own initialization, if error during the process, set error field and exit
 }
