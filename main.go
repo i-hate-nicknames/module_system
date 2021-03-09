@@ -47,7 +47,9 @@ func regVisorModule() {
 func main() {
 	conf := Config("some config")
 	ctx := context.Background()
-	a.InitConcurrent(ctx, conf)
+	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
+	defer cancel()
+	visor.InitConcurrent(ctx, conf)
 	err := a.Wait(ctx)
 	if err != nil {
 		log.Fatalf("Error init: %s", err)

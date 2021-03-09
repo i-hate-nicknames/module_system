@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 )
 
@@ -18,25 +19,27 @@ type Module struct {
 	err     error
 	done    chan struct{}
 	deps    []*Module
-	mux     sync.Mutex
+	mux     *sync.Mutex
 	running bool
 }
 
 // MakeModule returns a new module with given init function and dependencies
 func MakeModule(name string, init InitFN, deps ...*Module) Module {
 	done := make(chan struct{}, 0)
+	var mux sync.Mutex
 	return Module{
 		Name: name,
 		init: init,
 		deps: deps,
 		done: done,
+		mux:  &mux,
 	}
 }
 
 func (m *Module) setRunning(val bool) bool {
 	m.mux.Lock()
 	defer m.mux.Unlock()
-	if m.running != val {
+	if m.running == val {
 		return false
 	}
 	m.running = val
@@ -94,6 +97,7 @@ func (m *Module) InitConcurrent(ctx context.Context, conf Config) {
 		return
 	}
 	defer func() {
+		log.Printf("mod %s: finishing init", m.Name)
 		close(m.done)
 		ok = m.setRunning(false)
 		// this should never happen
@@ -103,6 +107,7 @@ func (m *Module) InitConcurrent(ctx context.Context, conf Config) {
 	}()
 	// start init in every dependency
 	for _, dep := range m.deps {
+		log.Printf("mod %s: init dep %s", m.Name, dep.Name)
 		if !m.isInitDone() {
 			go dep.InitConcurrent(ctx, conf)
 		}
@@ -113,11 +118,13 @@ func (m *Module) InitConcurrent(ctx context.Context, conf Config) {
 	// any dependency errored
 	// when cancelled return immediately
 	for _, dep := range m.deps {
+		log.Printf("mod %s: wait dep %s", m.Name, dep.Name)
 		err := dep.Wait(ctx)
 		if err != nil {
 			m.err = err
 		}
 	}
+	log.Printf("mod %s: init self", m.Name)
 	// init the module itself
 	err := m.init(conf)
 	if err != nil {
