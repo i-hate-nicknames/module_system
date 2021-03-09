@@ -14,26 +14,26 @@ type Module struct {
 }
 
 // do I need it?
-type Target struct {
+type State struct {
 	Name    string
-	Require *Target
+	Require *State
 	Modules []*Module
 }
 
-func (t *Target) RegisterModule(m *Module) {
+func (t *State) RegisterModule(m *Module) {
 	t.Modules = append(t.Modules, m)
 }
 
-var visorTarget *Target
+var visorState *State
 
 func init() {
-	initTargets()
+	initStates()
 	initModuleB()
 	initModuleA()
 }
 
-func initTargets() {
-	visorTarget = &Target{Name: "visor.target"}
+func initStates() {
+	visorState = &State{Name: "visor.State"}
 }
 
 var a *Module
@@ -44,7 +44,7 @@ func initModuleA() {
 		fmt.Printf("initializing module a with conf %s\n", conf)
 	}
 	a = &Module{Name: "a", InitFN: initfn}
-	visorTarget.RegisterModule(a)
+	visorState.RegisterModule(a)
 }
 
 var b *Module
@@ -56,10 +56,10 @@ func initModuleB() {
 	}
 	b = &Module{Name: "b", InitFN: initfn}
 	b.Deps = append(b.Deps, a)
-	visorTarget.RegisterModule(b)
+	visorState.RegisterModule(b)
 }
 
-func InitSequential(t *Target) {
+func InitSequential(t *State) {
 	if t.Require != nil {
 		InitSequential(t.Require)
 	}
@@ -70,6 +70,12 @@ func InitSequential(t *Target) {
 	}
 }
 
+func InitConcurrent(t *State) {
+	if t.Require != nil {
+		InitConcurrent(t.Require)
+	}
+}
+
 func main() {
-	InitSequential(visorTarget)
+	InitSequential(visorState)
 }
