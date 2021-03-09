@@ -9,8 +9,9 @@ var visorState *State
 
 func init() {
 	initStates()
-	initModuleB()
+
 	initModuleA()
+	initModuleB()
 }
 
 func initStates() {

@@ -16,7 +16,7 @@ type Module struct {
 	Name    string
 	init    InitFN
 	err     error
-	done    <-chan struct{}
+	done    chan struct{}
 	deps    []*Module
 	mux     sync.Mutex
 	running bool
@@ -57,12 +57,17 @@ func (m *Module) isInitDone() bool {
 // If any of the underlying dependencies, or this module initialize with error, return that error
 func (m *Module) InitSequential(conf string) error {
 	for _, dep := range m.deps {
+		if dep.isInitDone() {
+			continue
+		}
 		err := dep.InitSequential(conf)
 		if err != nil {
 			return err
 		}
 	}
-	return m.init(conf)
+	err := m.init(conf)
+	close(m.done)
+	return err
 }
 
 // InitConcurrent initializes all module dependencies recursively and concurrently.
@@ -109,4 +114,5 @@ func (m *Module) InitConcurrent(ctx context.Context, conf string) {
 	if !ok {
 		panic(fmt.Sprintf("double initialization of module %s", m.Name))
 	}
+	close(m.done)
 }
