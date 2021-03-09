@@ -1,6 +1,10 @@
 package main
 
-import "sync"
+import (
+	"context"
+	"fmt"
+	"sync"
+)
 
 // InitFN is a function that initializes module from a config
 type InitFN func(conf string) error
@@ -14,8 +18,8 @@ type Module struct {
 	err     error
 	done    <-chan struct{}
 	deps    []*Module
-	mux     sync.RWMutex
-	started bool
+	mux     sync.Mutex
+	running bool
 }
 
 // MakeModule returns a new module with given init function and dependencies
@@ -26,6 +30,25 @@ func MakeModule(name string, init InitFN, deps ...*Module) *Module {
 		init: init,
 		deps: deps,
 		done: done,
+	}
+}
+
+func (m *Module) setRunning(val bool) bool {
+	m.mux.Lock()
+	defer m.mux.Unlock()
+	if m.running != val {
+		return false
+	}
+	m.running = val
+	return true
+}
+
+func (m *Module) isInitDone() bool {
+	select {
+	case <-m.done:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -47,18 +70,43 @@ func (m *Module) InitSequential(conf string) error {
 // in each in a separate goroutine. It will block and wait on modules whose dependencies are not
 // yet fully initialized themselves
 // This function should be run in a separate goroutine
-func (m *Module) InitConcurrent() {
-	// if is in the process of initialization, exit
+func (m *Module) InitConcurrent(ctx context.Context, conf string) {
+	// don't do anything if we already started
+	ok := m.setRunning(true)
+	if !ok {
+		return
+	}
+	// start init in every dependency
+	for _, dep := range m.deps {
+		if !m.isInitDone() {
+			go dep.InitConcurrent(ctx, conf)
+		}
+	}
 
-	// for every dependency:
-	// if a dependency is initialized, skip it
-	// if a dependency is not initialized, run a goroutine
-	// that will try to initialize it
-
-	// for every dependency:
-	// wait for finishing initialization
-	// check error field of every dependency, if any has it, set its own error
-	// field and exit
-
-	// run own initialization, if error during the process, set error field and exit
+	// wait for every dependency to finish
+	// collect error status for each, and set own error in case
+	// any dependency errored
+	// when cancelled return immediately
+	for _, dep := range m.deps {
+		select {
+		case <-dep.done:
+			if dep.err != nil {
+				m.err = dep.err
+				return
+			}
+		case <-ctx.Done():
+			m.err = context.Canceled
+			return
+		}
+	}
+	// init the module itself
+	err := m.init(conf)
+	if err != nil {
+		m.err = err
+	}
+	ok = m.setRunning(false)
+	// this should never happen
+	if !ok {
+		panic(fmt.Sprintf("double initialization of module %s", m.Name))
+	}
 }
