@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -43,10 +45,14 @@ func regVisorModule() {
 }
 
 func main() {
-	// conf := Config("some config")
-	// ctx := context.Background()
-	// visor.InitConcurrent(ctx, conf)
-
 	conf := Config("some config")
-	visor.InitSequential(conf)
+	ctx := context.Background()
+	a.InitConcurrent(ctx, conf)
+	err := a.Wait(ctx)
+	if err != nil {
+		log.Fatalf("Error init: %s", err)
+	}
+
+	// conf := Config("some config")
+	// visor.InitSequential(conf)
 }

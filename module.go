@@ -70,6 +70,18 @@ func (m *Module) InitSequential(conf Config) error {
 	return err
 }
 
+func (m *Module) Wait(ctx context.Context) error {
+	select {
+	case <-m.done:
+		if m.err != nil {
+			return m.err
+		}
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // InitConcurrent initializes all module dependencies recursively and concurrently.
 // If module depends on modules a and b, this function will try to run init functions for a and b
 // in each in a separate goroutine. It will block and wait on modules whose dependencies are not
@@ -81,6 +93,14 @@ func (m *Module) InitConcurrent(ctx context.Context, conf Config) {
 	if !ok {
 		return
 	}
+	defer func() {
+		close(m.done)
+		ok = m.setRunning(false)
+		// this should never happen
+		if !ok {
+			panic(fmt.Sprintf("double initialization of module %s", m.Name))
+		}
+	}()
 	// start init in every dependency
 	for _, dep := range m.deps {
 		if !m.isInitDone() {
@@ -93,15 +113,9 @@ func (m *Module) InitConcurrent(ctx context.Context, conf Config) {
 	// any dependency errored
 	// when cancelled return immediately
 	for _, dep := range m.deps {
-		select {
-		case <-dep.done:
-			if dep.err != nil {
-				m.err = dep.err
-				return
-			}
-		case <-ctx.Done():
-			m.err = context.Canceled
-			return
+		err := dep.Wait(ctx)
+		if err != nil {
+			m.err = err
 		}
 	}
 	// init the module itself
@@ -109,10 +123,4 @@ func (m *Module) InitConcurrent(ctx context.Context, conf Config) {
 	if err != nil {
 		m.err = err
 	}
-	ok = m.setRunning(false)
-	// this should never happen
-	if !ok {
-		panic(fmt.Sprintf("double initialization of module %s", m.Name))
-	}
-	close(m.done)
 }
