@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-type Config string
-
 func init() {
 	regModuleB()
 	regModuleA()
@@ -18,9 +16,9 @@ func init() {
 var a Module
 
 func regModuleA() {
-	init := func(conf Config) error {
+	init := func() error {
 		time.Sleep(1 * time.Second)
-		fmt.Printf("initializing module a with conf %s\n", conf)
+		fmt.Println("initializing module a")
 		return nil
 	}
 	a = MakeModule("a", init)
@@ -29,9 +27,9 @@ func regModuleA() {
 var b Module
 
 func regModuleB() {
-	init := func(conf Config) error {
+	init := func() error {
 		time.Sleep(1 * time.Second)
-		fmt.Printf("initializing module b with conf %s\n", conf)
+		fmt.Printf("initializing module b\n")
 		return nil
 	}
 	b = MakeModule("b", init, &a)
@@ -40,16 +38,15 @@ func regModuleB() {
 var visor Module
 
 func regVisorModule() {
-	init := func(conf Config) error { return nil }
+	init := func() error { return nil }
 	visor = MakeModule("visor", init, &a, &b)
 }
 
 func main() {
-	conf := Config("some config")
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
 	defer cancel()
-	visor.InitConcurrent(ctx, conf)
+	visor.InitConcurrent(ctx)
 	err := a.Wait(ctx)
 	if err != nil {
 		log.Fatalf("Error init: %s", err)

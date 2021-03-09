@@ -7,8 +7,8 @@ import (
 	"sync"
 )
 
-// InitFN is a function that initializes module from a config
-type InitFN func(conf Config) error
+// InitFN is a function that initializes a module
+type InitFN func() error
 
 // Module is a single system unit that represents a part of the system that must
 // be initialized. Module can have dependencies, that should be initialized before
@@ -58,17 +58,17 @@ func (m *Module) isInitDone() bool {
 // InitSequential initializes all module dependencies recursively and sequentially, one by one
 // first to last and depth first
 // If any of the underlying dependencies, or this module initialize with error, return that error
-func (m *Module) InitSequential(conf Config) error {
+func (m *Module) InitSequential() error {
 	for _, dep := range m.deps {
 		if dep.isInitDone() {
 			continue
 		}
-		err := dep.InitSequential(conf)
+		err := dep.InitSequential()
 		if err != nil {
 			return err
 		}
 	}
-	err := m.init(conf)
+	err := m.init()
 	close(m.done)
 	return err
 }
@@ -90,7 +90,7 @@ func (m *Module) Wait(ctx context.Context) error {
 // in each in a separate goroutine. It will block and wait on modules whose dependencies are not
 // yet fully initialized themselves
 // This function should be run in a separate goroutine
-func (m *Module) InitConcurrent(ctx context.Context, conf Config) {
+func (m *Module) InitConcurrent(ctx context.Context) {
 	// don't do anything if we already started
 	ok := m.setRunning(true)
 	if !ok {
@@ -109,7 +109,7 @@ func (m *Module) InitConcurrent(ctx context.Context, conf Config) {
 	for _, dep := range m.deps {
 		log.Printf("mod %s: init dep %s", m.Name, dep.Name)
 		if !m.isInitDone() {
-			go dep.InitConcurrent(ctx, conf)
+			go dep.InitConcurrent(ctx)
 		}
 	}
 
@@ -126,7 +126,7 @@ func (m *Module) InitConcurrent(ctx context.Context, conf Config) {
 	}
 	log.Printf("mod %s: init self", m.Name)
 	// init the module itself
-	err := m.init(conf)
+	err := m.init()
 	if err != nil {
 		m.err = err
 	}
