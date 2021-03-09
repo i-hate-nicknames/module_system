@@ -6,11 +6,25 @@ import (
 )
 
 type Module struct {
-	Name    string
-	InitFN  func(conf string) error
-	Success bool
-	Done    chan struct{}
-	Deps    []*Module
+	Name   string
+	InitFN func(conf string) error
+	Error  error
+	Done   chan struct{}
+	Deps   []*Module
+}
+
+func (m *Module) InitSequential(conf string) error {
+	for _, dep := range m.Deps {
+		err := dep.InitSequential(conf)
+		if err != nil {
+			return err
+		}
+	}
+	return m.InitFN(conf)
+}
+
+func (m *Module) InitConcurrent() {
+
 }
 
 type State struct {
@@ -29,8 +43,7 @@ func (t *State) InitSequential() error {
 	}
 	conf := "seq conf"
 	for _, mod := range t.Modules {
-		fmt.Println("sraka")
-		err := mod.InitFN(conf)
+		err := mod.InitSequential(conf)
 		if err != nil {
 			return err
 		}
