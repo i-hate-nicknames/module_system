@@ -46,33 +46,28 @@ func (m *Module) setRunning(val bool) bool {
 	return true
 }
 
-func (m *Module) isInitDone() bool {
-	select {
-	case <-m.done:
-		return true
-	default:
-		return false
-	}
-}
-
 // InitSequential initializes all module dependencies recursively and sequentially, one by one
 // first to last and depth first
 // If any of the underlying dependencies, or this module initialize with error, return that error
 func (m *Module) InitSequential() error {
+	// early quit if initialized
+	select {
+	case <-m.done:
+		return nil
+	default:
+	}
+	defer close(m.done)
 	for _, dep := range m.deps {
-		if dep.isInitDone() {
-			continue
-		}
 		err := dep.InitSequential()
 		if err != nil {
 			return err
 		}
 	}
-	err := m.init()
-	close(m.done)
-	return err
+	return m.init()
 }
 
+// Wait for the module to be initialized
+// return initialization error if any
 func (m *Module) Wait(ctx context.Context) error {
 	select {
 	case <-m.done:
@@ -89,7 +84,7 @@ func (m *Module) Wait(ctx context.Context) error {
 // If module depends on modules a and b, this function will try to run init functions for a and b
 // in each in a separate goroutine. It will block and wait on modules whose dependencies are not
 // yet fully initialized themselves
-// This function should be run in a separate goroutine
+// This function blocks until all dependencis are initialized
 func (m *Module) InitConcurrent(ctx context.Context) {
 	// don't do anything if we already started
 	ok := m.setRunning(true)
@@ -108,15 +103,15 @@ func (m *Module) InitConcurrent(ctx context.Context) {
 	// start init in every dependency
 	for _, dep := range m.deps {
 		log.Printf("mod %s: init dep %s", m.Name, dep.Name)
-		if !m.isInitDone() {
-			go dep.InitConcurrent(ctx)
-		}
+		go dep.InitConcurrent(ctx)
 	}
 
 	// wait for every dependency to finish
 	// collect error status for each, and set own error in case
 	// any dependency errored
 	// when cancelled return immediately
+	// todo: waitgroup + errors channel might be quicker to fail than
+	// iterating and waiting
 	for _, dep := range m.deps {
 		log.Printf("mod %s: wait dep %s", m.Name, dep.Name)
 		err := dep.Wait(ctx)
