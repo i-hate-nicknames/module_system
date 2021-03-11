@@ -59,9 +59,8 @@ func main() {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*15)
 	defer cancel()
 	visor.InitConcurrent(ctx)
-	err := a.Wait(ctx)
-	if err != nil {
-		log.Fatalf("Error init: %s", err)
+	if visor.err != nil {
+		log.Fatalf("Error init: %s", visor.err)
 	}
 
 	// conf := Config("some config")
