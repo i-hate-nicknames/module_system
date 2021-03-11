@@ -117,6 +117,7 @@ func (m *Module) InitConcurrent(ctx context.Context) {
 		err := dep.Wait(ctx)
 		if err != nil {
 			m.err = err
+			return
 		}
 	}
 	log.Printf("mod %s: init self", m.Name)
